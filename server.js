@@ -170,6 +170,27 @@ app.get('/share', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'share.html'));
 });
 
+// ─── HEALTH CHECK ────────────────────────────────────────────
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'alive', uptime: process.uptime() });
+});
+
+// ─── SELF-PING CRON (keeps Render free tier awake) ───────────
 app.listen(PORT, () => {
   console.log(`🎮 Donga Ni Kanipettu server running on port ${PORT}`);
+
+  // Self-ping every 14 minutes to prevent Render from sleeping
+  const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+  if (RENDER_URL) {
+    const INTERVAL = 14 * 60 * 1000; // 14 minutes
+    setInterval(() => {
+      const http = require(RENDER_URL.startsWith('https') ? 'https' : 'http');
+      http.get(`${RENDER_URL}/api/health`, (res) => {
+        console.log(`[CRON] Self-ping: ${res.statusCode}`);
+      }).on('error', (err) => {
+        console.log(`[CRON] Self-ping failed: ${err.message}`);
+      });
+    }, INTERVAL);
+    console.log(`🔄 Self-ping cron active (every 14 min) → ${RENDER_URL}`);
+  }
 });
