@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Set up a new Donga Ni Kanipettu game - Enter player names and choose imposters">
+  <title>Setup Game | దొంగ ని కనిపెట్టు</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕵️</text></svg>">
+</head>
+<body>
+  <div class="container">
+    <button class="back-btn" onclick="window.location.href='/'" title="Back">← </button>
+
+    <div class="page-content">
+      <div>
+        <h1 class="title-telugu" style="font-size: 1.6rem;">🎮 New Game</h1>
+        <p class="subtitle">Set up your game and invite friends</p>
+      </div>
+
+      <div class="card" style="display: flex; flex-direction: column; gap: 18px;">
+        <!-- Number of Players -->
+        <div class="form-group">
+          <label class="form-label" for="playerCount">Number of Players</label>
+          <select class="form-select" id="playerCount">
+            <option value="" disabled selected>Select players...</option>
+          </select>
+        </div>
+
+        <!-- Player Names (dynamic) -->
+        <div class="form-group hidden" id="namesSection">
+          <label class="form-label">Player Names</label>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: -4px;">
+            ⭐ First name = Game Host
+          </p>
+          <div class="names-grid" id="namesGrid"></div>
+        </div>
+
+        <!-- Number of Imposters -->
+        <div class="form-group hidden" id="imposterSection">
+          <label class="form-label" for="imposterCount">Number of Imposters</label>
+          <select class="form-select" id="imposterCount"></select>
+        </div>
+      </div>
+
+      <!-- Start Game Button -->
+      <button class="btn btn-primary btn-shimmer hidden" id="startGameBtn" onclick="createGame()">
+        <span class="btn-icon">🚀</span>
+        Start Game
+      </button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const playerCountSelect = document.getElementById('playerCount');
+    const namesSection = document.getElementById('namesSection');
+    const namesGrid = document.getElementById('namesGrid');
+    const imposterSection = document.getElementById('imposterSection');
+    const imposterCountSelect = document.getElementById('imposterCount');
+    const startGameBtn = document.getElementById('startGameBtn');
+
+    // Populate player count dropdown (3 to 20)
+    for (let i = 3; i <= 20; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `${i} Players`;
+      playerCountSelect.appendChild(opt);
+    }
+
+    // Handle player count change
+    playerCountSelect.addEventListener('change', () => {
+      const count = parseInt(playerCountSelect.value);
+      namesGrid.innerHTML = '';
+
+      for (let i = 1; i <= count; i++) {
+        const row = document.createElement('div');
+        row.className = 'name-input-row';
+        row.innerHTML = `
+          <span class="name-number">${i}</span>
+          <input type="text" class="form-input player-name-input" 
+                 placeholder="${i === 1 ? 'Host name (you)' : `Player ${i} name`}" 
+                 maxlength="20" autocomplete="off">
+        `;
+        namesGrid.appendChild(row);
+      }
+
+      namesSection.classList.remove('hidden');
+      updateImposterDropdown(count);
+      imposterSection.classList.remove('hidden');
+      startGameBtn.classList.remove('hidden');
+    });
+
+    function updateImposterDropdown(playerCount) {
+      imposterCountSelect.innerHTML = '';
+      const maxImposters = Math.max(1, Math.floor(playerCount / 4));
+      for (let i = 1; i <= maxImposters; i++) {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `${i} Imposter${i > 1 ? 's' : ''}`;
+        imposterCountSelect.appendChild(opt);
+      }
+    }
+
+    async function createGame() {
+      const inputs = document.querySelectorAll('.player-name-input');
+      const names = [];
+
+      for (const input of inputs) {
+        const name = input.value.trim();
+        if (!name) {
+          showToast('⚠️ Please fill in all player names');
+          input.focus();
+          return;
+        }
+        if (names.includes(name)) {
+          showToast('⚠️ Duplicate names are not allowed');
+          input.focus();
+          return;
+        }
+        names.push(name);
+      }
+
+      const imposterCount = parseInt(imposterCountSelect.value);
+
+      startGameBtn.disabled = true;
+      startGameBtn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px;"></div> Creating...';
+
+      try {
+        const res = await fetch('/api/create-room', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ players: names, imposterCount })
+        });
+
+        const data = await res.json();
+
+        if (data.roomId) {
+          // Store creator info
+          localStorage.setItem(`room_${data.roomId}_creator`, names[0]);
+          window.location.href = `/share?id=${data.roomId}`;
+        } else {
+          showToast('❌ Failed to create game');
+          resetButton();
+        }
+      } catch (err) {
+        showToast('❌ Connection error. Try again.');
+        resetButton();
+      }
+    }
+
+    function resetButton() {
+      startGameBtn.disabled = false;
+      startGameBtn.innerHTML = '<span class="btn-icon">🚀</span> Start Game';
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+  </script>
+</body>
+</html>

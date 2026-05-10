@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Share your Donga Ni Kanipettu game link with friends">
+  <title>Share Game | దొంగ ని కనిపెట్టు</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕵️</text></svg>">
+</head>
+<body>
+  <div class="container">
+    <div class="page-content">
+      <div class="logo-icon">🎉</div>
+
+      <div>
+        <h1 class="title-telugu" style="font-size: 1.6rem;">Game Created!</h1>
+        <p class="subtitle">Share this link with your friends to join the game</p>
+      </div>
+
+      <!-- Room Link -->
+      <div class="card" style="display: flex; flex-direction: column; gap: 16px;">
+        <label class="form-label">Game Link</label>
+        <div class="link-display" id="roomLink">Loading...</div>
+
+        <div class="share-buttons">
+          <button class="btn btn-cyan btn-sm" id="copyBtn" onclick="copyLink()">
+            <span class="btn-icon">📋</span>
+            Copy Link
+          </button>
+
+          <button class="btn btn-green btn-sm" id="whatsappBtn" onclick="shareWhatsApp()">
+            <span class="btn-icon">💬</span>
+            Share to WhatsApp
+          </button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Enter Game Button -->
+      <button class="btn btn-primary btn-shimmer" id="enterGameBtn" onclick="enterGame()">
+        <span class="btn-icon">🚪</span>
+        Enter the Game
+      </button>
+
+      <p class="version-tag">Share the link first, then enter the game!</p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const roomId = params.get('id');
+
+    if (!roomId) {
+      window.location.href = '/';
+    }
+
+    // Build the game room URL
+    const baseUrl = window.location.origin;
+    const roomUrl = `${baseUrl}/room?id=${roomId}`;
+
+    document.getElementById('roomLink').textContent = roomUrl;
+
+    function copyLink() {
+      navigator.clipboard.writeText(roomUrl).then(() => {
+        showToast('✅ Link copied!');
+        document.getElementById('copyBtn').innerHTML = '<span class="btn-icon">✅</span> Copied!';
+        setTimeout(() => {
+          document.getElementById('copyBtn').innerHTML = '<span class="btn-icon">📋</span> Copy Link';
+        }, 2000);
+      }).catch(() => {
+        // Fallback for older browsers
+        const textarea = document.createElement('textarea');
+        textarea.value = roomUrl;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showToast('✅ Link copied!');
+      });
+    }
+
+    function shareWhatsApp() {
+      const message = `🕵️ Join my *Donga Ni Kanipettu* game!\n\nClick here to play 👇\n${roomUrl}`;
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+    }
+
+    function enterGame() {
+      window.location.href = roomUrl;
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+  </script>
+</body>
+</html>

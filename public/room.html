@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Donga Ni Kanipettu - Play the imposter word game with your friends!">
+  <title>Game Room | దొంగ ని కనిపెట్టు</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕵️</text></svg>">
+</head>
+<body>
+  <div class="container">
+    <div class="page-content" id="mainContent">
+
+      <!-- LOADING STATE -->
+      <div id="loadingState">
+        <div class="spinner"></div>
+        <p class="subtitle">Loading game...</p>
+      </div>
+
+      <!-- ERROR STATE -->
+      <div id="errorState" class="hidden" style="text-align: center;">
+        <div style="font-size: 3rem; margin-bottom: 12px;">😢</div>
+        <h2>Game Not Found</h2>
+        <p class="subtitle" style="margin-bottom: 16px;">This game room doesn't exist or has expired.</p>
+        <a href="/" class="btn btn-primary" style="max-width: 250px; margin: 0 auto;">
+          <span class="btn-icon">🏠</span>
+          Go Home
+        </a>
+      </div>
+
+      <!-- LOBBY: Player Selection -->
+      <div id="lobbyState" class="hidden" style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 20px;">
+        <div>
+          <h1 class="title-telugu" style="font-size: 1.5rem;">దొంగ ని కనిపెట్టు</h1>
+          <p class="subtitle">Tap your name to enter the game</p>
+        </div>
+
+        <div class="players-grid" id="playersGrid"></div>
+
+        <p class="subtitle" style="font-size: 0.75rem; color: var(--text-muted);">
+          ✅ = Player has entered the game
+        </p>
+      </div>
+
+      <!-- GAME VIEW: After player enters -->
+      <div id="gameState" class="hidden" style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 20px;">
+        
+        <!-- Header -->
+        <div class="game-header">
+          <h1 class="title-telugu" style="font-size: 1.3rem;">దొంగ ని కనిపెట్టు</h1>
+          <p class="player-greeting">Playing as <strong id="currentPlayerName"></strong></p>
+          <div id="creatorBadge" class="creator-badge hidden">
+            👑 Game Host
+          </div>
+        </div>
+
+        <!-- Round Badge -->
+        <div class="round-badge" id="roundBadge">
+          <span>🎯</span>
+          <span id="roundNumber">Waiting for host to start...</span>
+        </div>
+
+        <!-- Word Display -->
+        <div class="word-display" id="wordDisplay">
+          <p class="waiting-text" id="waitingText">Waiting for the host to start a round...</p>
+          <div id="wordContent" class="hidden">
+            <div id="imposterIcon" class="imposter-icon hidden">🕵️</div>
+            <p class="word-text" id="wordText"></p>
+          </div>
+        </div>
+
+        <!-- Game Actions -->
+        <div class="game-actions">
+          <!-- Creator: New Word button -->
+          <button class="btn btn-orange hidden" id="newWordBtn" onclick="startNewRound()">
+            <span class="btn-icon">🎲</span>
+            New Word
+          </button>
+
+          <!-- Everyone: Refresh button -->
+          <button class="btn btn-cyan" id="refreshBtn" onclick="refreshWord()">
+            <span class="btn-icon">🔄</span>
+            Refresh
+          </button>
+
+          <!-- Leave game -->
+          <button class="btn btn-secondary btn-sm" onclick="leaveGame()" style="margin-top: 8px;">
+            <span class="btn-icon">🚪</span>
+            Leave Game
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div class="modal-overlay hidden" id="confirmModal">
+    <div class="modal">
+      <h3>🔐 Confirm Your Identity</h3>
+      <p>Are you</p>
+      <p class="highlight-name" id="modalPlayerName"></p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal()">No</button>
+        <button class="btn btn-primary btn-sm" onclick="confirmEntry()">Yes, that's me!</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ─── STATE ────────────────────────────────────────────
+    const params = new URLSearchParams(window.location.search);
+    const roomId = params.get('id');
+    let roomData = null;
+    let currentPlayer = null;
+    let playerToken = null;
+    let lastKnownRound = 0;
+    let selectedPlayer = null;
+
+    // ─── ELEMENTS ─────────────────────────────────────────
+    const loadingState = document.getElementById('loadingState');
+    const errorState = document.getElementById('errorState');
+    const lobbyState = document.getElementById('lobbyState');
+    const gameState = document.getElementById('gameState');
+    const playersGrid = document.getElementById('playersGrid');
+    const confirmModal = document.getElementById('confirmModal');
+    const modalPlayerName = document.getElementById('modalPlayerName');
+    const wordDisplay = document.getElementById('wordDisplay');
+    const wordContent = document.getElementById('wordContent');
+    const wordText = document.getElementById('wordText');
+    const waitingText = document.getElementById('waitingText');
+    const imposterIcon = document.getElementById('imposterIcon');
+    const roundBadge = document.getElementById('roundBadge');
+    const roundNumber = document.getElementById('roundNumber');
+    const newWordBtn = document.getElementById('newWordBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const creatorBadge = document.getElementById('creatorBadge');
+    const currentPlayerName = document.getElementById('currentPlayerName');
+
+    // ─── INIT ─────────────────────────────────────────────
+    if (!roomId) {
+      window.location.href = '/';
+    } else {
+      init();
+    }
+
+    async function init() {
+      // Check if we have a saved session
+      const savedPlayer = localStorage.getItem(`room_${roomId}_player`);
+      const savedToken = localStorage.getItem(`room_${roomId}_token`);
+
+      try {
+        const res = await fetch(`/api/room/${roomId}`);
+        if (!res.ok) {
+          showError();
+          return;
+        }
+
+        roomData = await res.json();
+
+        // If player was previously saved and is valid
+        if (savedPlayer && roomData.players.includes(savedPlayer) && savedToken) {
+          currentPlayer = savedPlayer;
+          playerToken = savedToken;
+          enterGameView();
+        } else {
+          showLobby();
+        }
+      } catch (err) {
+        showError();
+      }
+    }
+
+    // ─── STATES ───────────────────────────────────────────
+    function showError() {
+      loadingState.classList.add('hidden');
+      errorState.classList.remove('hidden');
+    }
+
+    function showLobby() {
+      loadingState.classList.add('hidden');
+      lobbyState.classList.remove('hidden');
+      renderPlayerCards();
+    }
+
+    function renderPlayerCards() {
+      playersGrid.innerHTML = '';
+      const icons = ['😎', '🤠', '🥳', '😈', '🤓', '🦊', '🐱', '🦁', '🐯', '🐻', '🐼', '🐨', '🐸', '🐵', '🦄', '🐲', '🦅', '🐧', '🐙', '🦋'];
+
+      roomData.players.forEach((name, idx) => {
+        const card = document.createElement('div');
+        card.className = `player-card${roomData.claimed[name] ? ' claimed' : ''}`;
+        card.innerHTML = `
+          <div class="player-icon">${icons[idx % icons.length]}</div>
+          <div class="player-name">${escapeHtml(name)}</div>
+        `;
+        card.addEventListener('click', () => selectPlayer(name));
+        playersGrid.appendChild(card);
+      });
+    }
+
+    function selectPlayer(name) {
+      selectedPlayer = name;
+      modalPlayerName.textContent = name;
+      confirmModal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+      confirmModal.classList.add('hidden');
+      selectedPlayer = null;
+    }
+
+    async function confirmEntry() {
+      if (!selectedPlayer) return;
+
+      try {
+        const res = await fetch(`/api/room/${roomId}/claim/${encodeURIComponent(selectedPlayer)}`, {
+          method: 'POST'
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          currentPlayer = selectedPlayer;
+          playerToken = data.token;
+
+          // Save to localStorage so link always works
+          localStorage.setItem(`room_${roomId}_player`, currentPlayer);
+          localStorage.setItem(`room_${roomId}_token`, playerToken);
+
+          closeModal();
+          enterGameView();
+        } else {
+          showToast('❌ Could not enter. Try again.');
+        }
+      } catch (err) {
+        showToast('❌ Connection error. Try again.');
+      }
+    }
+
+    // ─── GAME VIEW ────────────────────────────────────────
+    function enterGameView() {
+      loadingState.classList.add('hidden');
+      lobbyState.classList.add('hidden');
+      gameState.classList.remove('hidden');
+
+      currentPlayerName.textContent = currentPlayer;
+
+      // Show creator controls
+      if (currentPlayer === roomData.creator) {
+        newWordBtn.classList.remove('hidden');
+        creatorBadge.classList.remove('hidden');
+      }
+
+      // Auto-refresh on enter
+      refreshWord();
+    }
+
+    async function startNewRound() {
+      newWordBtn.disabled = true;
+      newWordBtn.innerHTML = '<div class="spinner" style="width:18px;height:18px;border-width:2px;"></div> Starting...';
+
+      try {
+        const res = await fetch(`/api/room/${roomId}/new-word`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerName: currentPlayer })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          showToast('✅ New round started! Everyone refresh!');
+          // Auto-refresh for creator
+          await refreshWord();
+        } else {
+          showToast(`❌ ${data.error || 'Failed to start round'}`);
+        }
+      } catch (err) {
+        showToast('❌ Connection error');
+      }
+
+      newWordBtn.disabled = false;
+      newWordBtn.innerHTML = '<span class="btn-icon">🎲</span> New Word';
+    }
+
+    async function refreshWord() {
+      refreshBtn.disabled = true;
+      refreshBtn.innerHTML = '<div class="spinner" style="width:18px;height:18px;border-width:2px;"></div> Loading...';
+
+      try {
+        const res = await fetch(`/api/room/${roomId}/player/${encodeURIComponent(currentPlayer)}`);
+        const data = await res.json();
+
+        if (data.waiting) {
+          // No round started yet
+          waitingText.classList.remove('hidden');
+          wordContent.classList.add('hidden');
+          wordDisplay.classList.remove('imposter');
+          roundNumber.textContent = 'Waiting for host...';
+        } else {
+          waitingText.classList.add('hidden');
+          wordContent.classList.remove('hidden');
+          wordDisplay.classList.add('revealed');
+
+          roundNumber.textContent = `Round ${data.round}`;
+
+          if (data.isImposter) {
+            // IMPOSTER!
+            wordDisplay.classList.add('imposter');
+            imposterIcon.classList.remove('hidden');
+            wordText.textContent = 'You are the IMPOSTER!';
+          } else {
+            // Normal player — show word
+            wordDisplay.classList.remove('imposter');
+            imposterIcon.classList.add('hidden');
+            wordText.textContent = data.word;
+          }
+
+          lastKnownRound = data.round;
+
+          // Remove the revealed animation after it plays
+          setTimeout(() => {
+            wordDisplay.classList.remove('revealed');
+          }, 600);
+        }
+      } catch (err) {
+        showToast('❌ Could not fetch word. Try again.');
+      }
+
+      refreshBtn.disabled = false;
+      refreshBtn.innerHTML = '<span class="btn-icon">🔄</span> Refresh';
+    }
+
+    function leaveGame() {
+      localStorage.removeItem(`room_${roomId}_player`);
+      localStorage.removeItem(`room_${roomId}_token`);
+      window.location.reload();
+    }
+
+    // ─── HELPERS ──────────────────────────────────────────
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+  </script>
+</body>
+</html>

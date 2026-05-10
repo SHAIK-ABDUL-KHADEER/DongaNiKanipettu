@@ -1,0 +1,14 @@
+{
+  "name": "donga-ni-kanipettu",
+  "version": "1.0.0",
+  "description": "Donga Ni Kanipettu - A fun imposter word game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "uuid": "^9.0.0"
+  }
+}
